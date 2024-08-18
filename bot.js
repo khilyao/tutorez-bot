@@ -1,43 +1,46 @@
 require("dotenv").config();
-const notebookAPI = require("./services/notebookAPI");
-const TelegramBot = require("node-telegram-bot-api");
+const notebookAPI = require("./services/api");
+const { showTutors, displayMainMenu, showErrorAuth } = require("./navigation");
+const { isUserAllowed } = require("./auth");
+const bot = require("./botInstance");
 const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 4040;
-const token = process.env.TG_BOT_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
 
 const userState = {};
 
-bot.on("message", (msg) => {
-  const chatId = msg.chat.id;
-  const messageText = msg.text;
+const chooseTutor = async (chatId) => {
+  const validTutors = await notebookAPI.fetchTutors().then(({ data }) => {
+    return data.map(({ tutor }) => {
+      return tutor.charAt(0).toUpperCase() + tutor.slice(1).toLowerCase();
+    });
+  });
 
-  if (userState[chatId] && userState[chatId].waitingForTutor) {
-    handleTutorSelection(chatId, messageText);
-    return;
-  }
+  const chunkArray = (array, chunkSize) => {
+    const result = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+      result.push(array.slice(i, i + chunkSize));
+    }
+    return result;
+  };
 
-  if (messageText === "/list") {
-    bot.sendMessage(
-      chatId,
-      "Оберіть репетитора:\nSanya\nRavil\nSofia\nEmir\nVika"
-    );
+  const tutorButtons = chunkArray(validTutors, 3).map((tutorsRow) => {
+    return tutorsRow.map((tutor) => ({ text: tutor }));
+  });
+  tutorButtons[tutorButtons.length - 1].push("Головне меню");
 
-    userState[chatId] = { waitingForTutor: true };
-  }
+  showTutors(chatId, tutorButtons);
+};
 
-  if (messageText === "/add") {
-    bot.sendMessage(chatId, "Окей, понял");
-  }
-});
+const handleTutorSelection = async (chatId, messageText) => {
+  const validTutors = await notebookAPI.fetchTutors().then(({ data }) => {
+    return data.map(({ tutor }) => tutor);
+  });
 
-async function handleTutorSelection(chatId, messageText) {
-  const validTutors = ["sanya", "ravil", "sofia", "emir", "vika"];
+  const mentorToFind = messageText.toLowerCase();
 
-  if (validTutors.includes(messageText)) {
+  if (validTutors.includes(mentorToFind)) {
     const { data } = await notebookAPI.fetchClients();
-    const mentorToFind = messageText.toLowerCase();
 
     const studentsInfo = data
       .filter(({ mentor }) => mentor === mentorToFind)
@@ -45,24 +48,66 @@ async function handleTutorSelection(chatId, messageText) {
         const lastLesson = lessonsPayment
           .reverse()
           .find(({ type }) => type === "lesson")?.date;
-        const lastLessonDate = lastLesson || "No last lesson";
+        const lastLessonDate = lastLesson || "No info";
 
-        return `\n${name}\nLessons per week: ${lessonsPerWeek}\nPrice: ${price}\nBalance (hours): ${paidHours}\nLast lesson: ${lastLessonDate}\n`;
+        return `\n<b>${name}</b>\n<b>Lessons per week</b>: ${lessonsPerWeek}\n<b>Price</b>: ${price}\n<b>Balance (hours)</b>: ${paidHours}\n<b>Last lesson</b>: ${lastLessonDate}\n`;
       })
       .join("");
 
     bot.sendMessage(
       chatId,
-      `Інформація щодо учнів ${messageText}: ${studentsInfo}`
+      `Інформація щодо учнів ${messageText}: ${studentsInfo}`,
+      { parse_mode: "HTML" }
     );
     userState[chatId].waitingForTutor = false;
+    displayMainMenu(chatId, {
+      nextAction: true,
+    });
+  } else if (messageText === "Головне меню") {
+    showDefaultMsg(chatId);
   } else {
     bot.sendMessage(
       chatId,
       "Будь ласка, оберіть одного з запропонованих репетиторів"
     );
   }
-}
+};
+
+bot.on("message", (msg) => {
+  const chatId = msg.chat.id;
+  const messageText = msg.text;
+  const username = msg.from.username ? `@${msg.from.username}` : null;
+
+  if (!isUserAllowed(username)) {
+    showErrorAuth(chatId);
+    return;
+  }
+
+  if (userState[chatId] && userState[chatId].waitingForTutor) {
+    handleTutorSelection(chatId, messageText);
+    return;
+  }
+
+  switch (messageText) {
+    case "/start":
+      displayMainMenu(chatId);
+      break;
+
+    case "Огляд студентів":
+      chooseTutor(chatId);
+      userState[chatId] = { waitingForTutor: true };
+      break;
+
+    case "Головне меню":
+      displayMainMenu(chatId);
+      break;
+
+    default:
+      displayMainMenu(chatId);
+  }
+});
+
+bot.on("polling_error", (err) => console.error(err));
 
 app.listen(PORT, () => {
   console.log(`Listening on port ${PORT}`);
