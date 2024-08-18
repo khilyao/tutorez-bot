@@ -64,7 +64,7 @@ const handleTutorSelection = async (chatId, messageText) => {
       nextAction: true,
     });
   } else if (messageText === "Головне меню") {
-    showDefaultMsg(chatId);
+    displayMainMenu(chatId);
   } else {
     bot.sendMessage(
       chatId,
