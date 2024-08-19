@@ -10,8 +10,8 @@ const PORT = process.env.PORT || 4040;
 const userState = {};
 
 const chooseTutor = async (chatId) => {
-  const validTutors = await notebookAPI.fetchTutors().then(({ data }) => {
-    return data.map(({ tutor }) => {
+  const validTutors = await notebookAPI.fetchTutors().then((tutors) => {
+    return tutors.map(({ tutor }) => {
       return tutor.charAt(0).toUpperCase() + tutor.slice(1).toLowerCase();
     });
   });
@@ -32,17 +32,35 @@ const chooseTutor = async (chatId) => {
   showTutors(chatId, tutorButtons);
 };
 
-const handleTutorSelection = async (chatId, messageText) => {
-  const validTutors = await notebookAPI.fetchTutors().then(({ data }) => {
-    return data.map(({ tutor }) => tutor);
+const handleTutorSelection = async (chatId, message) => {
+  const validTutors = await notebookAPI.fetchTutors().then((tutors) => {
+    return tutors.map(({ tutor }) => tutor);
   });
 
+  const messageText = message.text;
+  const currentTutorUsername = "@" + message.from.username;
   const mentorToFind = messageText.toLowerCase();
 
   if (validTutors.includes(mentorToFind)) {
-    const { data } = await notebookAPI.fetchClients();
+    const tutors = await notebookAPI.fetchTutors();
 
-    const studentsInfo = data
+    const isChoseTutor =
+      tutors.find(({ tutor }) => mentorToFind === tutor).tgUsername ===
+      currentTutorUsername
+        ? true
+        : false;
+
+    if (!isChoseTutor && currentTutorUsername !== process.env.MAIN_USERNAME) {
+      bot.sendMessage(chatId, `Ви не можете переглянути дану інформацію`);
+      displayMainMenu(chatId, {
+        nextAction: true,
+      });
+      userState[chatId] = { waitingForTutor: false };
+      return;
+    }
+
+    const clients = await notebookAPI.fetchClients();
+    const studentsInfo = clients
       .filter(({ mentor }) => mentor === mentorToFind)
       .map(({ name, lessonsPerWeek, price, paidHours, lessonsPayment }) => {
         const lastLesson = lessonsPayment
@@ -84,7 +102,7 @@ bot.on("message", (msg) => {
   }
 
   if (userState[chatId] && userState[chatId].waitingForTutor) {
-    handleTutorSelection(chatId, messageText);
+    handleTutorSelection(chatId, msg);
     return;
   }
 
