@@ -1,6 +1,11 @@
 require("dotenv").config();
 const notebookAPI = require("./services/api");
-const { showTutors, displayMainMenu, showErrorAuth } = require("./navigation");
+const {
+  showTutors,
+  displayMainMenu,
+  showErrorAuth,
+  showAddStudentForm,
+} = require("./navigation");
 const { isUserAllowed } = require("./auth");
 const bot = require("./botInstance");
 const express = require("express");
@@ -68,7 +73,7 @@ const handleTutorSelection = async (chatId, message) => {
           .find(({ type }) => type === "lesson")?.date;
         const lastLessonDate = lastLesson || "No info";
 
-        return `\n<b>${name}</b>\n<b>Lessons per week</b>: ${lessonsPerWeek}\n<b>Price</b>: ${price}\n<b>Balance (hours)</b>: ${paidHours}\n<b>Last lesson</b>: ${lastLessonDate}\n`;
+        return `\n<b>${name}</b>\n<b>Lessons per week</b>: ${lessonsPerWeek}\n<b>Price</b>: ${price}\n<b>Balance (paid hours)</b>: ${paidHours}\n<b>Last lesson</b>: ${lastLessonDate}\n`;
       })
       .join("");
 
@@ -101,6 +106,11 @@ bot.on("message", (msg) => {
     return;
   }
 
+  if (userState[chatId] && userState[chatId].addingStudent) {
+    showAddStudentForm(chatId, msg, userState);
+    return;
+  }
+
   if (userState[chatId] && userState[chatId].waitingForTutor) {
     handleTutorSelection(chatId, msg);
     return;
@@ -118,6 +128,11 @@ bot.on("message", (msg) => {
 
     case "Головне меню":
       displayMainMenu(chatId);
+      break;
+
+    case "Додати студента":
+      userState[chatId] = { addingStudent: true, step: 1, studentData: {} };
+      showAddStudentForm(chatId, msg, userState);
       break;
 
     default:

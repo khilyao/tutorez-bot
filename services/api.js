@@ -3,15 +3,27 @@ const axios = require("axios");
 axios.defaults.baseURL = `https://${process.env.API_KEY}.mockapi.io`;
 
 const fetchClients = async () => {
-  return axios.get("/clients").then(({ data }) => data);
+  try {
+    return axios.get("/clients").then(({ data }) => data);
+  } catch (e) {
+    throw new Error(e);
+  }
 };
 
 const fetchTutors = async () => {
-  return axios.get("/tutors").then(({ data }) => data);
+  try {
+    return axios.get("/tutors").then(({ data }) => data);
+  } catch (e) {
+    throw new Error(e);
+  }
 };
 
-const addClient = async () => {
-  return axios.post("/clients");
+const addClient = async (client) => {
+  try {
+    return axios.post("/clients", client);
+  } catch (e) {
+    throw new Error(e);
+  }
 };
 
 const notebookAPI = { fetchClients, fetchTutors, addClient };
