@@ -1,5 +1,6 @@
 const bot = require("./botInstance");
 const notebookAPI = require("./services/api");
+const { chunkArray } = require("./utils");
 
 const menuButtons = [
   ["Огляд студентів", "Редагувати студента"],
@@ -89,7 +90,7 @@ const showAddStudentForm = async (chatId, message, userState) => {
       userState[chatId].studentData.price = Number(messageText);
       userState[chatId].studentData.paidHours = 0;
       userState[chatId].studentData.mentor = defineMentor(currentTutorUsername);
-      console.log(userState[chatId].studentData);
+
       await notebookAPI.addClient(userState[chatId].studentData);
       bot.sendMessage(chatId, `Студент ${studentData.name} успішно доданий!`);
       userState[chatId] = { addingStudent: false, step: 0, studentData: {} };
@@ -102,9 +103,73 @@ const showAddStudentForm = async (chatId, message, userState) => {
   }
 };
 
+const removeClient = async (chatId, msg, userState) => {
+  const { step } = userState[chatId];
+  const currentTutorName = defineMentor("@" + msg.from.username);
+  const clients = await notebookAPI.fetchClients();
+
+  if (msg.text === "Головне меню") {
+    userState[chatId] = {};
+    displayMainMenu(chatId, { nextAction: true });
+    return;
+  }
+
+  if (step === 1) {
+    const filteredClients = clients.filter(
+      ({ mentor }) => mentor === currentTutorName
+    );
+    const possibleClientsToRemove = chunkArray(filteredClients, 4).map(
+      (tutorsRow) => {
+        return tutorsRow.map(({ name }) => ({ text: name }));
+      }
+    );
+
+    possibleClientsToRemove[possibleClientsToRemove.length - 1].push(
+      "Головне меню"
+    );
+
+    const clientsOptions = {
+      reply_markup: {
+        keyboard: possibleClientsToRemove,
+        one_time_keyboard: true,
+        resize_keyboard: true,
+      },
+    };
+
+    bot.sendMessage(
+      chatId,
+      "Оберіть необхідного студента для видалення",
+      clientsOptions
+    );
+
+    userState[chatId].step = 2;
+  } else if (step === 2) {
+    const studentToDelete = msg.text;
+
+    const idStudentToDelete = clients.find(
+      ({ mentor, name }) =>
+        studentToDelete === name && mentor === currentTutorName
+    )?.id;
+
+    await notebookAPI.removeClient(idStudentToDelete).then(({ status }) => {
+      if (status === 200) {
+        bot.sendMessage(chatId, "Студент успішно видалений!");
+        return;
+      }
+
+      bot.sendMessage(chatId, "Сталася помилка, спробуйте пізніше");
+    });
+
+    userState[chatId] = {};
+
+    displayMainMenu(chatId, { nextAction: true });
+  }
+};
+
 module.exports = {
   showTutors,
   displayMainMenu,
   showErrorAuth,
   showAddStudentForm,
+  removeClient,
 };

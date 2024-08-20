@@ -1,10 +1,12 @@
 require("dotenv").config();
 const notebookAPI = require("./services/api");
+const { chunkArray } = require("./utils");
 const {
   showTutors,
   displayMainMenu,
   showErrorAuth,
   showAddStudentForm,
+  removeClient,
 } = require("./navigation");
 const { isUserAllowed } = require("./auth");
 const bot = require("./botInstance");
@@ -20,14 +22,6 @@ const chooseTutor = async (chatId) => {
       return tutor.charAt(0).toUpperCase() + tutor.slice(1).toLowerCase();
     });
   });
-
-  const chunkArray = (array, chunkSize) => {
-    const result = [];
-    for (let i = 0; i < array.length; i += chunkSize) {
-      result.push(array.slice(i, i + chunkSize));
-    }
-    return result;
-  };
 
   const tutorButtons = chunkArray(validTutors, 3).map((tutorsRow) => {
     return tutorsRow.map((tutor) => ({ text: tutor }));
@@ -116,6 +110,11 @@ bot.on("message", (msg) => {
     return;
   }
 
+  if (userState[chatId] && userState[chatId].deletingStudent) {
+    removeClient(chatId, msg, userState);
+    return;
+  }
+
   switch (messageText) {
     case "/start":
       displayMainMenu(chatId);
@@ -133,6 +132,11 @@ bot.on("message", (msg) => {
     case "Додати студента":
       userState[chatId] = { addingStudent: true, step: 1, studentData: {} };
       showAddStudentForm(chatId, msg, userState);
+      break;
+
+    case "Вилучити студента":
+      userState[chatId] = { deletingStudent: true, step: 1 };
+      removeClient(chatId, msg, userState);
       break;
 
     default:

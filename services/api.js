@@ -26,5 +26,13 @@ const addClient = async (client) => {
   }
 };
 
-const notebookAPI = { fetchClients, fetchTutors, addClient };
+const removeClient = async (id) => {
+  try {
+    return axios.delete(`/clients/${id}`);
+  } catch (e) {
+    throw new Error(e);
+  }
+};
+
+const notebookAPI = { fetchClients, fetchTutors, addClient, removeClient };
 module.exports = notebookAPI;
