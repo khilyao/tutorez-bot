@@ -106,6 +106,12 @@ bot.on("message", (msg) => {
   }
 
   if (userState[chatId] && userState[chatId].waitingForTutor) {
+    if (messageText === "Огляд студентів" || messageText === "Головне меню") {
+      userState[chatId] = {};
+      displayMainMenu(chatId);
+      return;
+    }
+
     handleTutorSelection(chatId, msg);
     return;
   }
@@ -126,6 +132,7 @@ bot.on("message", (msg) => {
       break;
 
     case "Головне меню":
+      userState[chatId] = {};
       displayMainMenu(chatId);
       break;
 
