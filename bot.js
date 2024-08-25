@@ -7,6 +7,7 @@ const {
   showErrorAuth,
   showAddStudentForm,
   removeClient,
+  handleEditStudentInfo,
 } = require("./navigation");
 const { isUserAllowed } = require("./auth");
 const bot = require("./botInstance");
@@ -121,6 +122,17 @@ bot.on("message", (msg) => {
     return;
   }
 
+  if (userState[chatId] && userState[chatId].changingStudentInfo) {
+    if (messageText === "Головне меню") {
+      userState[chatId] = {};
+      displayMainMenu(chatId);
+      return;
+    }
+
+    handleEditStudentInfo(chatId, msg, userState);
+    return;
+  }
+
   switch (messageText) {
     case "/start":
       displayMainMenu(chatId);
@@ -144,6 +156,15 @@ bot.on("message", (msg) => {
     case "Вилучити студента":
       userState[chatId] = { deletingStudent: true, step: 1 };
       removeClient(chatId, msg, userState);
+      break;
+
+    case "Редагувати студента":
+      userState[chatId] = {
+        changingStudentInfo: true,
+        step: 1,
+        studentData: {},
+      };
+      handleEditStudentInfo(chatId, msg, userState);
       break;
 
     default:
