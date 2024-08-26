@@ -42,11 +42,20 @@ const addPaymentToClient = async (id, client) => {
   }
 };
 
+const addLessonToClient = async (id, client) => {
+  try {
+    return axios.put(`/clients/${id}`, client);
+  } catch (e) {
+    throw new Error(e);
+  }
+};
+
 const notebookAPI = {
   fetchClients,
   fetchTutors,
   addClient,
   removeClient,
   addPaymentToClient,
+  addLessonToClient,
 };
 module.exports = notebookAPI;

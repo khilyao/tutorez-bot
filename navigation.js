@@ -320,9 +320,13 @@ const handleEditStudentInfo = async (chatId, msg, userState) => {
         const durationBtns = {
           reply_markup: {
             keyboard: [
-              [{ text: "30 хв" }, { text: "45 хв" }, { text: "1 год" }],
               [
-                { text: "1 год 30 хв" },
+                { text: "0.5 год (30 хв)" },
+                { text: "0.75 год (45 хв)" },
+                { text: "1 год" },
+              ],
+              [
+                { text: "1.5 год (1 год 30 хв)" },
                 { text: "2 год" },
                 { text: "Головне меню" },
               ],
@@ -385,11 +389,96 @@ const handleEditStudentInfo = async (chatId, msg, userState) => {
         paidHours: newPaidHours,
       };
 
-      notebookAPI.addPaymentToClient(
+      const { status } = await notebookAPI.addPaymentToClient(
         userState[chatId].idStudentToEdit,
         updatedStudent
       );
+
+      if (status === 200) {
+        bot.sendMessage(chatId, "Зміну про оплату було успішно внесено!");
+      } else {
+        bot.sendMessage(
+          chatId,
+          "Виникли помилки при внесенні платежу. Спробуйте ще раз!"
+        );
+      }
+
+      userState[chatId] = {};
+      displayMainMenu(chatId);
+      return;
     }
+
+    if (userState[chatId].addingLesson) {
+      const lessonDuration = parseFloat(currentMsg);
+
+      userState[chatId].newStudentLessonData = {
+        id: uuidv4(),
+        duration: lessonDuration,
+        date: getCurrentDate(),
+        paid: student.paidHours > lessonDuration ? true : false,
+        type: "lesson",
+      };
+      userState[chatId].lessonDuration = lessonDuration;
+
+      const homeworkBtns = {
+        reply_markup: {
+          keyboard: [["Так", "Ні", "Головне меню"]],
+          ...defaultBtnActions,
+        },
+      };
+
+      bot.sendMessage(
+        chatId,
+        "Чи виконав учень домашнє завдання?",
+        homeworkBtns
+      );
+    }
+
+    userState[chatId].step = 6;
+  } else if (step === 6) {
+    if (currentMsg === "Так") {
+      userState[chatId].newStudentLessonData.homework = true;
+    } else {
+      userState[chatId].newStudentLessonData.homework = false;
+    }
+
+    reviewBtns = {
+      reply_markup: {
+        keyboard: [["1", "2", "3", "4", "5", "Головне меню"]],
+        ...defaultBtnActions,
+      },
+    };
+
+    bot.sendMessage(chatId, "Поставте оцінку учню за заняття", reviewBtns);
+
+    userState[chatId].step = 7;
+  } else if (step === 7) {
+    const student = clients.find(
+      ({ id }) => userState[chatId].idStudentToEdit === id
+    );
+
+    const review = parseInt(currentMsg);
+
+    userState[chatId].newStudentLessonData.review = review;
+    student.lessonsPayment.push(userState[chatId].newStudentLessonData);
+    student.paidHours -= userState[chatId].lessonDuration;
+
+    const { status } = await notebookAPI.addLessonToClient(
+      userState[chatId].idStudentToEdit,
+      student
+    );
+
+    if (status === 200) {
+      bot.sendMessage(chatId, "Заняття успішно добавлено до історії");
+    } else {
+      bot.sendMessage(
+        chatId,
+        "Виникли помилки при створенні запису. Спробуйте ще раз!"
+      );
+    }
+
+    userState[chatId] = {};
+    displayMainMenu(chatId);
   }
 };
 
