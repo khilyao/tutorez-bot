@@ -1,3 +1,4 @@
+const https = require("https");
 require("dotenv").config();
 const notebookAPI = require("./services/api");
 const { chunkArray } = require("./utils");
@@ -16,6 +17,10 @@ const app = express();
 const PORT = process.env.PORT || 4040;
 
 const userState = {};
+
+setInterval(() => {
+  https.get("https://tutorez-bot.onrender.com");
+}, 45000);
 
 const chooseTutor = async (chatId) => {
   const validTutors = await notebookAPI.fetchTutors().then((tutors) => {
