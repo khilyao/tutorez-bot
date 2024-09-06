@@ -50,6 +50,22 @@ const addLessonToClient = async (id, client) => {
   }
 };
 
+const addRecordAboutStudentForTutor = async (id, tutorInfo) => {
+  try {
+    return axios.put(`/tutors/${id}`, tutorInfo);
+  } catch (e) {
+    throw new Error(e);
+  }
+};
+
+const updateTutorInfoByPossibleStudents = async (id, tutorInfo) => {
+  try {
+    return axios.put(`/tutors/${id}`, tutorInfo);
+  } catch (e) {
+    throw new Error(e);
+  }
+};
+
 const notebookAPI = {
   fetchClients,
   fetchTutors,
@@ -57,5 +73,7 @@ const notebookAPI = {
   removeClient,
   addPaymentToClient,
   addLessonToClient,
+  addRecordAboutStudentForTutor,
+  updateTutorInfoByPossibleStudents,
 };
 module.exports = notebookAPI;

@@ -4,8 +4,9 @@ const { v4: uuidv4 } = require("uuid");
 const { chunkArray, getCurrentDate } = require("./utils");
 
 const menuButtons = [
-  ["Огляд студентів", "Редагувати студента"],
-  ["Додати студента", "Вилучити студента", "Головне меню"],
+  ["Огляд студентів", "Редагувати студента", "Додати студента"],
+  ["Вилучити студента", "Нові студенти"],
+  ["Повідомити про втрату студента", "Головне меню"],
 ];
 
 const defaultBtnActions = {
@@ -80,6 +81,8 @@ const defineMentor = (currentTutorUsername) => {
       return "vika";
     case "@verdaverra":
       return "ravil";
+    case "@mnikkki":
+      return "veronika";
     default:
       return null;
   }
@@ -184,6 +187,208 @@ const removeClient = async (chatId, msg, userState) => {
     userState[chatId] = {};
 
     displayMainMenu(chatId, { nextAction: true });
+  }
+};
+
+const updatePossibleStudentInfo = async (chatId, msg, userState) => {
+  const currentTutorName = "@" + msg.from.username;
+  const allPossibleTutors = await notebookAPI.fetchTutors();
+
+  const currentTutorInfo = await allPossibleTutors.find(
+    ({ tutor }) => tutor === defineMentor(currentTutorName)
+  );
+
+  const possibleStudentsForCurrentTutor = currentTutorInfo?.possibleStudents;
+
+  if (userState[chatId].step === 1) {
+    const history = possibleStudentsForCurrentTutor
+      ? possibleStudentsForCurrentTutor
+          .map(
+            ({ name, subject, price, contact, history }) =>
+              `\n<b>Name</b>: ${name}\n<b>Subject</b>: ${subject}\n<b>Price</b>: ${price}\n<b>Contacts</b>:${contact}\n<b>History</b>: ${history
+                .map(
+                  ({ date, message }) =>
+                    `\n<b>Дата створення запису</b>: ${date}\n<b>Повідомлення</b>: ${message}\n`
+                )
+                .join("")}`
+          )
+          .join("\n-----------------------------------------\n")
+      : "Очікуємо нових студентів...";
+
+    const students = possibleStudentsForCurrentTutor.map(({ name }) => name);
+
+    const clientsOptions = {
+      reply_markup: {
+        keyboard: [students, ["Головне меню"]],
+        ...defaultBtnActions,
+      },
+      parse_mode: "HTML",
+    };
+
+    bot.sendMessage(chatId, history, clientsOptions);
+
+    bot.sendMessage(
+      chatId,
+      "Оберіть учня для зміни поточної інформації",
+      clientsOptions
+    );
+
+    userState[chatId].step = 2;
+  } else if (userState[chatId].step === 2) {
+    userState[chatId].idStudentToManipulate =
+      possibleStudentsForCurrentTutor.find(({ name }) => name === msg.text)?.id;
+
+    const actionsOptions = {
+      reply_markup: {
+        keyboard: [
+          ["Внести запис до історії студента"],
+          [
+            "Видалити з потенційних учнів (після цього потрібно власноруч внести до основних учнів)",
+          ],
+          ["Головне меню"],
+        ],
+        ...defaultBtnActions,
+      },
+      parse_mode: "HTML",
+    };
+
+    userState[chatId].step = 3;
+
+    bot.sendMessage(
+      chatId,
+      "Оберіть наступну дію для цього учня",
+      actionsOptions
+    );
+  } else if (userState[chatId].step === 3) {
+    if (msg.text === "Внести запис до історії студента") {
+      bot.sendMessage(
+        chatId,
+        "Розпишіть коротко відомість про студента\n<b>Приклади:</b>\n<i>05.09 позаймалися півгодини пробного уроку, мама дитини захотіла викладача-дівчину</i>\nАбо\n<i>Клієнту було задорого, домовитися за меншу ціну не вийшло, насправді у дитини рівень знань виявився вище, англ мова - B1</i>",
+        { parse_mode: "HTML" }
+      );
+
+      userState[chatId].step = 4;
+      userState[chatId].record = true;
+    }
+
+    if (
+      msg.text ===
+      "Видалити з потенційних учнів (після цього потрібно власноруч внести до основних учнів)"
+    ) {
+      const updatedPossibleStudents = currentTutorInfo.possibleStudents.filter(
+        ({ id }) => id !== userState[chatId].idStudentToManipulate
+      );
+
+      currentTutorInfo.possibleStudents = updatedPossibleStudents;
+
+      notebookAPI.updateTutorInfoByPossibleStudents(
+        currentTutorInfo.tutorId,
+        currentTutorInfo
+      );
+
+      bot.sendMessage(
+        chatId,
+        "Вітаю з новим студентом! Студент видалений з потенційних. Не забудь внести його до своїх студентів окремо"
+      );
+      userState[chatId] = {};
+      displayMainMenu(chatId, { nextAction: false });
+    }
+  } else if (userState[chatId].step === 4) {
+    const possibleStudent = currentTutorInfo.possibleStudents.find(
+      ({ id }) => id === userState[chatId].idStudentToManipulate
+    );
+
+    possibleStudent.history.push({
+      date: getCurrentDate(),
+      message: msg.text,
+    });
+
+    notebookAPI.addRecordAboutStudentForTutor(
+      currentTutorInfo.tutorId,
+      currentTutorInfo
+    );
+
+    bot.sendMessage(
+      chatId,
+      "Запис про учня успішно створений! Невдовзі ви отримаєте фідбек"
+    );
+
+    userState[chatId] = {};
+    displayMainMenu(chatId);
+  }
+};
+
+const notifyAboutLosingStudent = async (chatId, msg, userState) => {
+  const { step } = userState[chatId];
+
+  if (step === 1) {
+    bot.sendMessage(
+      chatId,
+      "Вкажіть імʼя довіреної особи (відповідальна за оплату)"
+    );
+
+    userState[chatId].step = 2;
+  }
+
+  if (step === 2) {
+    userState[chatId].possibleStudent = {
+      name: msg.text,
+    };
+    userState[chatId].step = 3;
+
+    bot.sendMessage(
+      chatId,
+      "Вкажіть контакт особи (номер або нікнейм в телеграмі)"
+    );
+  }
+
+  if (step === 3) {
+    userState[chatId].step = 4;
+    userState[chatId].possibleStudent.contact = msg.text;
+
+    bot.sendMessage(chatId, "Вкажіть навчальний предмет(-и)");
+  }
+
+  if (step === 4) {
+    userState[chatId].possibleStudent.subject = msg.text;
+    userState[chatId].step = 5;
+
+    bot.sendMessage(chatId, "Вкажіть ціну за годину за якою ви займалися");
+  }
+
+  if (step === 5) {
+    userState[chatId].possibleStudent.price = msg.text;
+    userState[chatId].step = 6;
+
+    bot.sendMessage(
+      chatId,
+      "Напишіть будь-які уточнення по учню та коротенький опис причини чому перестали займатися"
+    );
+  }
+
+  if (step === 6) {
+    userState[chatId].possibleStudent.message = msg.text;
+
+    const { name, price, message, subject, contact } =
+      userState[chatId].possibleStudent;
+
+    bot.sendMessage(
+      chatId,
+      "Дані про учня були збережені! Вже шукаємо нового учня для тебе"
+    );
+
+    bot.sendMessage(
+      642894689,
+      `<b>Втрата студента!</b>\n<b>Імʼя:</b> ${name}\n<b>Предмет:</b> ${subject}\n<b>Контакт:</b> ${contact}\n<b>Ціна за годину</b>: ${price}\n<b>Повідомлення:</b> ${message}\n<b>Від репетитора:</b> ${defineMentor(
+        "@" + msg.from.username
+      )}`,
+      {
+        parse_mode: "HTML",
+      }
+    );
+
+    userState[chatId] = {};
+    displayMainMenu(chatId);
   }
 };
 
@@ -489,4 +694,6 @@ module.exports = {
   showAddStudentForm,
   handleEditStudentInfo,
   removeClient,
+  updatePossibleStudentInfo,
+  notifyAboutLosingStudent,
 };

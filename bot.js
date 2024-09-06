@@ -9,6 +9,8 @@ const {
   showAddStudentForm,
   removeClient,
   handleEditStudentInfo,
+  notifyAboutLosingStudent,
+  updatePossibleStudentInfo,
 } = require("./navigation");
 const { isUserAllowed } = require("./auth");
 const bot = require("./botInstance");
@@ -101,8 +103,16 @@ bot.on("message", (msg) => {
   const messageText = msg.text;
   const username = msg.from.username ? `@${msg.from.username}` : null;
 
+  console.log(`Log: action from ${username} in ${chatId}`);
+
   if (!isUserAllowed(username)) {
     showErrorAuth(chatId);
+    return;
+  }
+
+  if (messageText === "Головне меню") {
+    userState[chatId] = {};
+    displayMainMenu(chatId);
     return;
   }
 
@@ -127,13 +137,17 @@ bot.on("message", (msg) => {
     return;
   }
 
-  if (userState[chatId] && userState[chatId].changingStudentInfo) {
-    if (messageText === "Головне меню") {
-      userState[chatId] = {};
-      displayMainMenu(chatId);
-      return;
-    }
+  if (userState[chatId] && userState[chatId].manipulatingStudent) {
+    updatePossibleStudentInfo(chatId, msg, userState);
+    return;
+  }
 
+  if (userState[chatId] && userState[chatId].losingStudent) {
+    notifyAboutLosingStudent(chatId, msg, userState);
+    return;
+  }
+
+  if (userState[chatId] && userState[chatId].changingStudentInfo) {
     handleEditStudentInfo(chatId, msg, userState);
     return;
   }
@@ -161,6 +175,16 @@ bot.on("message", (msg) => {
     case "Вилучити студента":
       userState[chatId] = { deletingStudent: true, step: 1 };
       removeClient(chatId, msg, userState);
+      break;
+
+    case "Нові студенти":
+      userState[chatId] = { manipulatingStudent: true, step: 1 };
+      updatePossibleStudentInfo(chatId, msg, userState);
+      break;
+
+    case "Повідомити про втрату студента":
+      userState[chatId] = { losingStudent: true, step: 1 };
+      notifyAboutLosingStudent(chatId, msg, userState);
       break;
 
     case "Редагувати студента":
