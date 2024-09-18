@@ -152,12 +152,25 @@ bot.on("message", (msg) => {
     return;
   }
 
+  const showTempError = (chatId) => {
+    bot.sendMessage(
+      chatId,
+      "<b>Бот оновлюється!⚒️</b>\nСкористайтеся сайтом для внесення інформації!\nВи все ще можете <b>повідомити про втрату студента.</b>",
+      { parse_mode: "HTML" }
+    );
+    displayMainMenu(chatId);
+  };
+
   switch (messageText) {
     case "/start":
       displayMainMenu(chatId);
+
       break;
 
     case "Огляд студентів":
+      showTempError(chatId);
+      return;
+
       chooseTutor(chatId);
       userState[chatId] = { waitingForTutor: true };
       break;
@@ -168,16 +181,22 @@ bot.on("message", (msg) => {
       break;
 
     case "Додати студента":
+      showTempError(chatId);
+      return;
       userState[chatId] = { addingStudent: true, step: 1, studentData: {} };
       showAddStudentForm(chatId, msg, userState);
       break;
 
     case "Вилучити студента":
+      showTempError(chatId);
+      return;
       userState[chatId] = { deletingStudent: true, step: 1 };
       removeClient(chatId, msg, userState);
       break;
 
     case "Нові студенти":
+      showTempError(chatId);
+      return;
       userState[chatId] = { manipulatingStudent: true, step: 1 };
       updatePossibleStudentInfo(chatId, msg, userState);
       break;
@@ -188,6 +207,8 @@ bot.on("message", (msg) => {
       break;
 
     case "Редагувати студента":
+      showTempError(chatId);
+      return;
       userState[chatId] = {
         changingStudentInfo: true,
         step: 1,
